@@ -14,15 +14,19 @@ namespace DockerEnvFileValidator
 
         static void Main(string[] args)
         {
+            int type = 0;
+            string statusMsg = string.Empty;
+
             _dockerPath = args[0];
-
-            //_dockerPath = @"C:\Projects\Helix.Examples\examples\helix-basic-tds-consolidated";
-            //_dockerPath = @"C:\Projects\Helix.Examples\examples\helix-basic-aspnetcore";
-
             if (string.IsNullOrWhiteSpace(_dockerPath))
             {
                 Console.WriteLine("Docker Folder Path with .env file Required!");
                 return;
+            }
+
+            if (!Directory.Exists(_dockerPath))
+            {
+                Console.WriteLine("Missing path in file system, wrong first param!");
             }
 
             if (!Directory.GetFiles(_dockerPath, ".env").Any())
@@ -31,6 +35,15 @@ namespace DockerEnvFileValidator
 
                 File.Create(_dockerPath + ".env");
             }
+
+            if (args.Count()>1)
+            {
+                if (!int.TryParse(args[1], out type)) throw new Exception("Second Parameter must be 0,1 or 2");
+                if (type > 2) throw new Exception("Second Parameter must be 0,1 or 2");
+            }
+
+            //_dockerPath = @"C:\Projects\Helix.Examples\examples\helix-basic-tds-consolidated";
+            //_dockerPath = @"C:\Projects\Helix.Examples\examples\helix-basic-aspnetcore";
 
             var usedEnvVars=SearchDirectoryforEnvVars(_dockerPath);
 
@@ -47,19 +60,31 @@ namespace DockerEnvFileValidator
 
             var preExistingEnvVars=GetEnvVarsfromExistingEnvFile(_dockerPath + "\\.env");
 
-            MissingEnvVars = usedEnvVars.Except(preExistingEnvVars);
+            switch (type)
+            {
+                case 0:
+                case 2:
+                    MissingEnvVars = usedEnvVars.Except(preExistingEnvVars);
+                    statusMsg = "Here are the missing vars in the .env file:";
+                    break;
+                case 1:
+                    MissingEnvVars = preExistingEnvVars.Except(usedEnvVars);
+                    statusMsg = "Here are the unused vars in the .env file:";
+                    break;
+            }
+
             if (MissingEnvVars.Any())
             {
                 Console.WriteLine();
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Here are the missing vars in the .env file:");
+                Console.WriteLine(statusMsg);
 
                 foreach (var missingvar in MissingEnvVars)
                 {
                     Console.WriteLine(missingvar);
                 }
 
-                UpdateEnvFile(_dockerPath + "\\.env");
+                if (type == 2) UpdateEnvFile(_dockerPath + "\\.env");
             }
             else
             {
@@ -102,16 +127,9 @@ namespace DockerEnvFileValidator
             return charList;
         }
 
-        private static bool StartBrace(char letter, int letterIndex)
+        private static bool CharPresent(char letter, int letterIndex, char charToCheck)
         {
-            if (letter != '{') return false;
-
-            return true;
-        }
-
-        private static bool EndBrace(char letter, int letterIndex)
-        {
-            if (letter != '}') return false;
+            if (letter != charToCheck) return false;
 
             return true;
         }
@@ -182,8 +200,8 @@ namespace DockerEnvFileValidator
 
                     for (int i = 0; i < charList.Length; i++)
                     {
-                        if (StartBrace(charList[i], i)) { startBraceIndex = i; }
-                        if(startBraceIndex > -1) if (EndBrace(charList[i], i)) { endBraceIndex = i; }
+                        if (CharPresent(charList[i], i,'{')) { startBraceIndex = i; }
+                        if(startBraceIndex > -1) if (CharPresent(charList[i], i, '}')) { endBraceIndex = i; }
 
                         if (startBraceIndex > -1 && endBraceIndex > -1)
                         {
